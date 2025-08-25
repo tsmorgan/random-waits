@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Random Waits</title>
+        <link href="https://fonts.googleapis.com/css2?family=Gideon+Roman&display=swap" rel="stylesheet">
+        <style>
+            body {
+                font-family: 'Gideon Roman', Georgia, serif;
+                background: #111;
+                color: #eee;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                text-align: center;
+                margin: 0;
+                padding: 0;
+                position: relative;
+            }
+            .line,
+            .meta {
+                transition: opacity 0.5s ease;
+            }
+            .line {
+                font-size: 2em;
+                max-width: 800px;
+                line-height: 1.5;
+                white-space: pre-line;
+                margin-bottom: 0.5em;
+                position: relative;
+                cursor: pointer;
+                opacity: 1;
+            }
+            .meta {
+                font-size: 1em;
+                color: #aaa;
+                opacity: 0;
+            }
+            .line:hover + .meta {
+                opacity: 1;
+            }
+            .fade-out {
+                opacity: 0 !important;
+            }
+            #history {
+                position: absolute;
+                top: 5px;
+                left: 5px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+                max-width: 95vw;
+            }
+            .history-box {
+                width: 10px;
+                height: 10px;
+                background: #444;
+                cursor: pointer;
+                transition: background 0.3s ease;
+            }
+            .history-box.active {
+                background: #AAA;
+            }
+            .history-box.hover {
+                background: #888;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="line">Loading…</div>
+        <div class="meta"></div>
+        <div id="history"></div>
+
+        <script src="file-list.js"></script>
+
+        <script>
+            const history = [];
+            let activeBox = null;
+
+            function preventOrphans(text) {
+                return text
+                    .split("\n")
+                    .map(line => {
+                        const trimmed = line.trim();
+                        const lastSpace = trimmed.lastIndexOf(" ");
+                        if (lastSpace > 0) {
+                            return trimmed.slice(0, lastSpace) + "\u00A0" + trimmed.slice(lastSpace + 1);
+                        }
+                        return trimmed;
+                    })
+                    .join("\n");
+            }
+
+            function encodeState(fileIndex, start, count) {
+                const raw = `${fileIndex}-${start}-${count}`;
+                return btoa(raw).replace(/=+$/, ""); // strip padding
+            }
+
+            function decodeState(code) {
+                try {
+                    const raw = atob(code);
+                    const [fileIndex, start, count] = raw
+                        .split("-")
+                        .map(Number);
+                    if (isNaN(fileIndex) || isNaN(start) || isNaN(count)) 
+                        return null;
+                    return {fileIndex, start, count};
+                } catch  {
+                    return null;
+                }
+            }
+
+            async function loadLyric(file, start, count) {
+                const response = await fetch(file);
+                const data = await response.json();
+
+                if (!Array.isArray(data.lyrics)) 
+                    return {text: "No lyrics found!", meta: "", file, start: 0, count: 1};
+                
+                const selected = data
+                    .lyrics
+                    .slice(start, start + count);
+                const text = preventOrphans(selected.join("\n"));
+
+                return {file, start, count, text, meta: `${data.title} — ${data.album}`};
+            }
+
+            async function getRandomLine() {
+                const fileIndex = Math.floor(Math.random() * files.length);
+                const randomFile = files[fileIndex];
+                const response = await fetch(randomFile);
+                const data = await response.json();
+
+                if (!Array.isArray(data.lyrics)) 
+                    return {
+                        text: "No lyrics found!",
+                        meta: "",
+                        file: randomFile,
+                        start: 0,
+                        count: 1,
+                        fileIndex
+                    };
+                
+                const choices = [1, 2, 4];
+                const count = choices[Math.floor(Math.random() * choices.length)];
+                const start = Math.floor(Math.random() * (data.lyrics.length - count + 1));
+                const selected = data
+                    .lyrics
+                    .slice(start, start + count);
+                const text = preventOrphans(selected.join("\n"));
+
+                return {
+                    file: randomFile,
+                    start,
+                    count,
+                    text,
+                    meta: `${data.title} — ${data.album}`,
+                    fileIndex
+                };
+            }
+
+            function showLine(entry) {
+                const lineEl = document.querySelector(".line");
+                const metaEl = document.querySelector(".meta");
+
+                lineEl
+                    .classList
+                    .add("fade-out");
+                metaEl
+                    .classList
+                    .add("fade-out");
+
+                setTimeout(() => {
+                    lineEl.textContent = entry.text;
+                    metaEl.textContent = entry.meta;
+
+                    lineEl
+                        .classList
+                        .remove("fade-out");
+                    metaEl
+                        .classList
+                        .remove("fade-out");
+                }, 500);
+
+                // update URL with encoded code
+                const code = encodeState(entry.fileIndex, entry.start, entry.count);
+                const url = new URL(window.location);
+                url
+                    .searchParams
+                    .set("c", code);
+                window
+                    .history
+                    .pushState({}, "", url);
+            }
+
+            function addHistory(entry) {
+                history.push(entry);
+
+                const box = document.createElement("div");
+                box.className = "history-box";
+                box.title = entry.meta;
+                box.addEventListener("click", () => {
+                    showLine(entry);
+                    setActiveBox(box);
+                });
+                document
+                    .getElementById("history")
+                    .appendChild(box);
+
+                setActiveBox(box);
+            }
+
+            function setActiveBox(box) {
+                if (activeBox) 
+                    activeBox
+                        .classList
+                        .remove("active");
+                activeBox = box;
+                activeBox
+                    .classList
+                    .add("active");
+            }
+
+            async function showRandomAndAddHistory() {
+                const entry = await getRandomLine();
+                showLine(entry);
+                addHistory(entry);
+            }
+
+            async function showFromURL() {
+                const params = new URLSearchParams(window.location.search);
+                const code = params.get("c");
+
+                if (code) {
+                    const decoded = decodeState(code);
+                    if (decoded) {
+                        const {fileIndex, start, count} = decoded;
+                        if (files[fileIndex]) {
+                            const entry = await loadLyric(files[fileIndex], start, count);
+                            entry.fileIndex = fileIndex;
+                            showLine(entry);
+                            addHistory(entry);
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }(async () => {
+                const ok = await showFromURL();
+                if (!ok) {
+                    await showRandomAndAddHistory();
+                }
+            })();
+
+            document
+                .querySelector(".line")
+                .addEventListener("click", showRandomAndAddHistory);
+        </script>
+    </body>
+</html>
