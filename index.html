@@ -32,6 +32,7 @@
                 position: relative;
                 cursor: pointer;
                 opacity: 1;
+                text-wrap: balance;
             }
             .meta {
                 font-size: 1em;
@@ -66,13 +67,26 @@
             .history-box:hover {
                 background: #AAA;
             }
+            #gooduns-link a {
+                color: #555;
+                text-decoration: none;
+                font-size: 0.8em;
+                position: absolute;
+                bottom: 5px;
+                left: 5px;
+            }
+            #gooduns-link a:hover {
+                text-decoration: underline;
+            }
         </style>
     </head>
     <body>
         <div class="line">Loading…</div>
         <div class="meta"></div>
         <div id="history"></div>
-
+        <div id="gooduns-link" style="">
+            <a href="gooduns.html" style="">gooduns</a>
+        </div>
         <script src="file-list.js"></script>
 
         <script>
